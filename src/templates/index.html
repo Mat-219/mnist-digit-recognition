@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Handwritten Digit Recognition Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; }
+        .flex-box { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 20px; }
+        .drawing-section { flex: 1; min-width: 300px; display: flex; flex-direction: column; align-items: center; }
+        .results-section { flex: 1; min-width: 300px; }
+        canvas { border: 3px solid #2c3e50; border-radius: 4px; background: white; cursor: crosshair; touch-action: none; }
+        .controls { margin-top: 15px; display: flex; gap: 10px; align-items: center; }
+        button { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        button:hover { background: #2980b9; }
+        button.secondary { background: #e74c3c; }
+        button.secondary:hover { background: #c0392b; }
+        select { padding: 8px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+        .prediction-card { background: #ecf0f1; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .pred-number { font-size: 36px; font-weight: bold; color: #2c3e50; }
+        .conf { color: #7f8c8d; font-size: 14px; }
+        .gallery { margin-top: 40px; }
+        .gallery img { max-width: 100%; border-radius: 6px; margin-top: 10px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Handwritten Digit Recognition</h1>
+    <p style="text-align: center; color: #7f8c8d;">Draw a digit (0–9) on the canvas below and test different neural network architectures in real time.</p>
+    
+    <div class="flex-box">
+        <div class="drawing-section">
+            <canvas id="canvas" width="280" height="280"></canvas>
+            <div class="controls">
+                <button class="secondary" onclick="clearCanvas()">Clear</button>
+                <label for="modelSelect">Model:</label>
+                <select id="modelSelect">
+                    <option value="all">All Models (Ensemble)</option>
+                    {% for name in model_names %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="controls" style="margin-top: 10px;">
+                <label>Brush Size: <input type="range" id="brushSize" min="15" max="40" value="25" oninput="updateBrush(this.value)"></label>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <div class="prediction-card">
+                <h3>Prediction Result</h3>
+                <div id="predResult" class="pred-number">-</div>
+                <div id="confResult" class="conf">Draw something to begin</div>
+            </div>
+            <div>
+                <canvas id="probChart" width="400" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="gallery">
+        <h2>Training Results & Visualizations</h2>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 400px;">
+                <h3>Accuracy & Loss Comparison</h3>
+                <img src="/static/1_comparison.png" onerror="this.style.display='none'" alt="Comparison">
+            </div>
+            <div style="flex: 1; min-width: 400px;">
+                <h3>Misclassified Digits Gallery</h3>
+                <img src="/static/3_misclassified.png" onerror="this.style.display='none'" alt="Misclassified">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let painting = false;
+    let brushWidth = 25;
+
+    function initCanvas() {
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = brushWidth;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "black";
+    }
+    initCanvas();
+
+    function updateBrush(val) {
+        brushWidth = parseInt(val);
+        ctx.lineWidth = brushWidth;
+    }
+
+    function startPosition(e) { painting = true; draw(e); }
+    defendPosition = (e) => { painting = false; ctx.beginPath(); sendPrediction(); }
+    function finishedPosition() { painting = false; ctx.beginPath(); sendPrediction(); }
+
+    function draw(e) {
+        if (!painting) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const y = (e.clientY || e.touches[0].clientY) - rect.top;
+        
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    }
+
+    canvas.addEventListener("mousedown", startPosition);
+    canvas.addEventListener("mouseup", finishedPosition);
+    canvas.addEventListener("mousemove", draw);
+
+    canvas.addEventListener("touchstart", startPosition);
+    canvas.addEventListener("touchend", finishedPosition);
+    canvas.addEventListener("touchmove", draw);
+
+    function clearCanvas() {
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        document.getElementById("predResult").innerText = "-";
+        document.getElementById("confResult").innerText = "Canvas cleared";
+        updateChart(Array(10).fill(0));
+    }
+
+    const ctxChart = document.getElementById("probChart").getContext("2d");
+    const probChart = new Chart(ctxChart, {
+        type: 'bar',
+        data: {
+            labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+            datasets: [{
+                label: 'Confidence Probability',
+                data: Array(10).fill(0),
+                backgroundColor: '#3498db',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true, max: 1 }
+            }
+        }
+    });
+
+    function updateChart(dataArray) {
+        probChart.data.datasets[0].data = dataArray;
+        probChart.update();
+    }
+
+    let timeout = null;
+    function sendPrediction() {
+        const imageData = canvas.toDataURL("image/png");
+        const modelName = document.getElementById("modelSelect").value;
+
+        fetch("/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: imageData, model: modelName })
+        })
+        .then(res => res.json())
+        .then(data => {
+            const results = data.results;
+            const firstKey = Object.keys(results)[0];
+            const resObj = results[firstKey];
+            
+            document.getElementById("predResult").innerText = resObj.digit;
+            document.getElementById("confResult").innerText = `Model: ${firstKey} | Confidence: ${(resObj.confidence * 100).toFixed(2)}%`;
+            updateChart(resObj.probabilities);
+        });
+    }
+
+    document.getElementById("modelSelect").addEventListener("change", sendPrediction);
+</script>
+</body>
+</html>

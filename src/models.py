@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
+@tf.keras.utils.register_keras_serializable()
 class ExpDecay(keras.optimizers.schedules.LearningRateSchedule):
     """lr = lrmin + (lrmax - lrmin) * exp(-step / decay_steps)"""
 
