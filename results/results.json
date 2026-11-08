@@ -1,0 +1,26 @@
+{
+  "1_softmax": {
+    "params": 7850,
+    "test_acc": 0.9216,
+    "max_test_acc": 0.9216,
+    "time_s": 11.9
+  },
+  "2_dense5_relu": {
+    "params": 185300,
+    "test_acc": 0.9776,
+    "max_test_acc": 0.9783,
+    "time_s": 26.7
+  },
+  "3_dense5_relu_dropout": {
+    "params": 185300,
+    "test_acc": 0.9761,
+    "max_test_acc": 0.977,
+    "time_s": 29.7
+  },
+  "4_conv5_dropout_lrdecay": {
+    "params": 122270,
+    "test_acc": 0.9905,
+    "max_test_acc": 0.9905,
+    "time_s": 39.2
+  }
+}
